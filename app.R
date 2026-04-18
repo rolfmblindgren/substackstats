@@ -13,35 +13,39 @@ library(scales)
 local_test_files <- function() {
   list(
     json = path.expand("~/Downloads/posts.json"),
-    csv = path.expand("~/Downloads/roffe_posts.csv")
+    csv = path.expand("~/Downloads/user_posts.csv"),
+    csv_legacy = path.expand("~/Downloads/roffe_posts.csv")
   )
 }
 
 local_source_description <- function(choice = "auto") {
   files <- local_test_files()
   has_json <- file.exists(files$json)
-  has_csv <- file.exists(files$csv)
+  csv_path <- if (file.exists(files$csv)) files$csv else if (file.exists(files$csv_legacy)) files$csv_legacy else NULL
+  has_csv <- !is.null(csv_path)
 
   if (is.null(choice) || identical(choice, "auto")) {
-    if (has_json && has_csv) return(paste0(files$csv, " + ", files$json, " (slått sammen)"))
-    if (has_csv) return(files$csv)
+    if (has_json && has_csv) return(paste0(csv_path, " + ", files$json, " (slått sammen)"))
+    if (has_csv) return(csv_path)
     if (has_json) return(files$json)
     return(NULL)
   }
 
   if (choice == "json") return(if (has_json) files$json else NULL)
-  if (choice == "csv") return(if (has_csv) files$csv else NULL)
+  if (choice == "csv") return(if (file.exists(files$csv)) files$csv else NULL)
+  if (choice == "csv_legacy") return(if (file.exists(files$csv_legacy)) files$csv_legacy else NULL)
   NULL
 }
 
 read_local_posts <- function(choice = "auto") {
   files <- local_test_files()
   has_json <- file.exists(files$json)
-  has_csv <- file.exists(files$csv)
+  csv_path <- if (file.exists(files$csv)) files$csv else if (file.exists(files$csv_legacy)) files$csv_legacy else NULL
+  has_csv <- !is.null(csv_path)
 
   if (is.null(choice) || identical(choice, "auto")) {
     if (has_json && has_csv) {
-      df_csv <- read_posts_file(files$csv)
+      df_csv <- read_posts_file(csv_path)
       df_json <- read_posts_file(files$json) %>%
         select(id, audience, slug, cover_image, type)
 
@@ -61,7 +65,8 @@ read_local_posts <- function(choice = "auto") {
     if (has_json) return(read_posts_file(files$json))
   }
 
-  if (identical(choice, "csv") && has_csv) return(read_posts_file(files$csv))
+  if (identical(choice, "csv") && file.exists(files$csv)) return(read_posts_file(files$csv))
+  if (identical(choice, "csv_legacy") && file.exists(files$csv_legacy)) return(read_posts_file(files$csv_legacy))
   if (identical(choice, "json") && has_json) return(read_posts_file(files$json))
 
   stop("Fant ingen testfiler i ~/Downloads. Legg inn posts.json eller roffe_posts.csv, eller skru av testdata.")
@@ -218,7 +223,12 @@ ui <- fluidPage(
         selectInput(
           "local_choice",
           "Testdatafil",
-          choices = c("Auto (slå sammen hvis mulig)" = "auto", "posts.json" = "json", "roffe_posts.csv" = "csv"),
+          choices = c(
+            "Auto (slå sammen hvis mulig)" = "auto",
+            "posts.json" = "json",
+            "user_posts.csv" = "csv",
+            "roffe_posts.csv (legacy)" = "csv_legacy"
+          ),
           selected = "auto"
         ),
         actionButton("reload", "Oppdater data"),
@@ -228,7 +238,7 @@ ui <- fluidPage(
         condition = "!input.use_local",
         fileInput(
           "files",
-          "Velg posts.json og/eller roffe_posts.csv",
+          "Velg posts.json og/eller user_posts.csv",
           accept = c(".json", ".csv"),
           multiple = TRUE
         )
@@ -238,7 +248,7 @@ ui <- fluidPage(
       uiOutput("audience_ui"),
       dateRangeInput("daterange", "Datointervall"),
       textInput("title_search", "Filtrer på tittel", placeholder = "f.eks. WISC, ADHD, HR"),
-      helpText("Tips: roffe_posts.csv har ofte mest tall. posts.json har ofte «Tilgang» (Alle / Kun betalende). I Auto slår appen dem sammen hvis begge finnes.")
+      helpText("Tips: user_posts.csv har ofte mest tall. posts.json har ofte «Tilgang» (Alle / Kun betalende). I Auto slår appen dem sammen hvis begge finnes.")
     ),
 
     mainPanel(
