@@ -1,0 +1,43 @@
+name: deploy-shiny
+
+on:
+  push:
+    branches: ["main"]
+
+env:
+  APP_NAME: ${{ github.event.repository.name }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Sjekk ut kode
+        uses: actions/checkout@v4
+
+      - name: Sett opp SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SHINY_DEPLOY_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H dnsgrendel.grendel.no >> ~/.ssh/known_hosts
+
+      - name: Sørg for at appmappa finnes
+        run: |
+          ssh deployshiny@dnsgrendel.grendel.no \
+            "sudo /usr/local/sbin/ensure-shiny-app-dir '${{ env.APP_NAME }}'"
+
+      - name: Synkroniser filer til server
+        run: |
+          rsync -avz --delete \
+            --mkpath \
+            ./ \
+            --chown=deployshiny:shinyapps \
+            --chmod=D775,F664 \
+            --exclude '.git' \
+            --exclude '.env' \
+            deployshiny@dnsgrendel.grendel.no:/srv/shiny-server/${{ env.APP_NAME }}/
+
+      - name: Restart Shiny Server
+        run: |
+          ssh deployshiny@dnsgrendel.grendel.no "sudo systemctl restart shiny-server"
