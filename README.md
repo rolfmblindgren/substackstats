@@ -20,11 +20,9 @@ Rscript -e 'shiny::runApp()'
 
 The app supports:
 
-- Uploading `posts.json` or `roffe_posts.csv` in the UI, or
-- Uploading `posts.json` or `user_posts.csv` in the UI, or
-- Using local “test data” from `~/Downloads/posts.json` and/or `~/Downloads/user_posts.csv`.
+- Uploading `posts.json` and/or `user_posts.csv` in the UI.
 
-When “Auto” is selected and both files exist, it merges them on `id`:
+If you upload both files, the app merges them on `id`:
 
 - `user_posts.csv` provides most numeric metrics
 - `posts.json` provides “Tilgang” (Alle / Kun betalende)

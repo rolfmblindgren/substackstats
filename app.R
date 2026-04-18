@@ -10,68 +10,6 @@ library(tidyr)
 library(lubridate)
 library(scales)
 
-local_test_files <- function() {
-  list(
-    json = path.expand("~/Downloads/posts.json"),
-    csv = path.expand("~/Downloads/user_posts.csv"),
-    csv_legacy = path.expand("~/Downloads/roffe_posts.csv")
-  )
-}
-
-local_source_description <- function(choice = "auto") {
-  files <- local_test_files()
-  has_json <- file.exists(files$json)
-  csv_path <- if (file.exists(files$csv)) files$csv else if (file.exists(files$csv_legacy)) files$csv_legacy else NULL
-  has_csv <- !is.null(csv_path)
-
-  if (is.null(choice) || identical(choice, "auto")) {
-    if (has_json && has_csv) return(paste0(csv_path, " + ", files$json, " (slått sammen)"))
-    if (has_csv) return(csv_path)
-    if (has_json) return(files$json)
-    return(NULL)
-  }
-
-  if (choice == "json") return(if (has_json) files$json else NULL)
-  if (choice == "csv") return(if (file.exists(files$csv)) files$csv else NULL)
-  if (choice == "csv_legacy") return(if (file.exists(files$csv_legacy)) files$csv_legacy else NULL)
-  NULL
-}
-
-read_local_posts <- function(choice = "auto") {
-  files <- local_test_files()
-  has_json <- file.exists(files$json)
-  csv_path <- if (file.exists(files$csv)) files$csv else if (file.exists(files$csv_legacy)) files$csv_legacy else NULL
-  has_csv <- !is.null(csv_path)
-
-  if (is.null(choice) || identical(choice, "auto")) {
-    if (has_json && has_csv) {
-      df_csv <- read_posts_file(csv_path)
-      df_json <- read_posts_file(files$json) %>%
-        select(id, audience, slug, cover_image, type)
-
-      return(df_csv %>%
-        left_join(df_json, by = "id", suffix = c("", ".json")) %>%
-        mutate(
-          audience_clean = na_if(na_if(audience, "Ukjent"), "0"),
-          audience = coalesce(audience_clean, `audience.json`, "Ukjent"),
-          slug = coalesce(slug, `slug.json`),
-          cover_image = coalesce(cover_image, `cover_image.json`),
-          type = coalesce(type, `type.json`)
-        ) %>%
-        select(-audience_clean, -ends_with(".json")))
-    }
-
-    if (has_csv) return(read_posts_file(files$csv))
-    if (has_json) return(read_posts_file(files$json))
-  }
-
-  if (identical(choice, "csv") && file.exists(files$csv)) return(read_posts_file(files$csv))
-  if (identical(choice, "csv_legacy") && file.exists(files$csv_legacy)) return(read_posts_file(files$csv_legacy))
-  if (identical(choice, "json") && has_json) return(read_posts_file(files$json))
-
-  stop("Fant ingen testfiler i ~/Downloads. Legg inn posts.json eller roffe_posts.csv, eller skru av testdata.")
-}
-
 read_uploaded_posts <- function(files_df) {
   if (is.null(files_df) || nrow(files_df) == 0) return(NULL)
 
@@ -213,42 +151,18 @@ ui <- fluidPage(
   sidebarLayout(
     sidebarPanel(
       width = 3,
-      checkboxInput(
-        "use_local",
-        "Bruk testdata fra Downloads (slipper opplasting)",
-        value = any(vapply(local_test_files(), file.exists, logical(1)))
-      ),
-      conditionalPanel(
-        condition = "input.use_local",
-        selectInput(
-          "local_choice",
-          "Testdatafil",
-          choices = c(
-            "Auto (slå sammen hvis mulig)" = "auto",
-            "posts.json" = "json",
-            "user_posts.csv" = "csv",
-            "roffe_posts.csv (legacy)" = "csv_legacy"
-          ),
-          selected = "auto"
-        ),
-        actionButton("reload", "Oppdater data"),
-        uiOutput("data_source_ui")
-      ),
-      conditionalPanel(
-        condition = "!input.use_local",
-        fileInput(
-          "files",
-          "Velg posts.json og/eller user_posts.csv",
-          accept = c(".json", ".csv"),
-          multiple = TRUE
-        )
+      fileInput(
+        "files",
+        "Velg posts.json og/eller user_posts.csv",
+        accept = c(".json", ".csv"),
+        multiple = TRUE
       ),
       numericInput("paid_current", "Aktive betalende nå (valgfritt)", value = NA, min = 0, step = 1),
       checkboxInput("published_only", "Vis bare publiserte poster", TRUE),
       uiOutput("audience_ui"),
       dateRangeInput("daterange", "Datointervall"),
       textInput("title_search", "Filtrer på tittel", placeholder = "f.eks. WISC, ADHD, HR"),
-      helpText("Tips: user_posts.csv har ofte mest tall. posts.json har ofte «Tilgang» (Alle / Kun betalende). I Auto slår appen dem sammen hvis begge finnes.")
+      helpText("Tips: user_posts.csv har ofte mest tall. posts.json har ofte «Tilgang» (Alle / Kun betalende). Hvis du velger begge, slår appen dem sammen.")
     ),
 
     mainPanel(
@@ -307,23 +221,10 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
   posts_raw <- reactive({
-    input$reload
-
-    if (isTRUE(input$use_local)) {
-      return(read_local_posts(input$local_choice))
-    }
-
     req(input$files)
     df <- read_uploaded_posts(input$files)
     shiny::validate(shiny::need(!is.null(df), "Velg minst én fil (posts.json og/eller roffe_posts.csv)."))
     df
-  })
-
-  output$data_source_ui <- renderUI({
-    req(isTRUE(input$use_local))
-    src <- local_source_description(input$local_choice)
-    if (is.null(src)) return(NULL)
-    tags$div(style = "margin-top:6px;color:#555;font-size:0.9rem;", paste0("Leser: ", src))
   })
 
   observeEvent(posts_raw(), {
