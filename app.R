@@ -67,6 +67,33 @@ read_local_posts <- function(choice = "auto") {
   stop("Fant ingen testfiler i ~/Downloads. Legg inn posts.json eller roffe_posts.csv, eller skru av testdata.")
 }
 
+read_uploaded_posts <- function(files_df) {
+  if (is.null(files_df) || nrow(files_df) == 0) return(NULL)
+
+  exts <- tolower(tools::file_ext(files_df$name))
+  idx_csv <- which(exts == "csv")
+  idx_json <- which(exts == "json")
+
+  if (length(idx_csv) > 0 && length(idx_json) > 0) {
+    df_csv <- read_posts_file(files_df$datapath[[idx_csv[[1]]]])
+    df_json <- read_posts_file(files_df$datapath[[idx_json[[1]]]]) %>%
+      select(id, audience, slug, cover_image, type)
+
+    return(df_csv %>%
+      left_join(df_json, by = "id", suffix = c("", ".json")) %>%
+      mutate(
+        audience_clean = na_if(na_if(audience, "Ukjent"), "0"),
+        audience = coalesce(audience_clean, `audience.json`, "Ukjent"),
+        slug = coalesce(slug, `slug.json`),
+        cover_image = coalesce(cover_image, `cover_image.json`),
+        type = coalesce(type, `type.json`)
+      ) %>%
+      select(-audience_clean, -ends_with(".json")))
+  }
+
+  read_posts_file(files_df$datapath[[1]])
+}
+
 safe_div <- function(x, y) {
   ifelse(is.na(y) | y == 0, NA_real_, x / y)
 }
@@ -199,7 +226,12 @@ ui <- fluidPage(
       ),
       conditionalPanel(
         condition = "!input.use_local",
-        fileInput("file", "Last opp posts.json eller roffe_posts.csv", accept = c(".json", ".csv"))
+        fileInput(
+          "files",
+          "Velg posts.json og/eller roffe_posts.csv",
+          accept = c(".json", ".csv"),
+          multiple = TRUE
+        )
       ),
       numericInput("paid_current", "Aktive betalende nå (valgfritt)", value = NA, min = 0, step = 1),
       checkboxInput("published_only", "Vis bare publiserte poster", TRUE),
@@ -271,8 +303,10 @@ server <- function(input, output, session) {
       return(read_local_posts(input$local_choice))
     }
 
-    req(input$file)
-    read_posts_file(input$file$datapath)
+    req(input$files)
+    df <- read_uploaded_posts(input$files)
+    shiny::validate(shiny::need(!is.null(df), "Velg minst én fil (posts.json og/eller roffe_posts.csv)."))
+    df
   })
 
   output$data_source_ui <- renderUI({
