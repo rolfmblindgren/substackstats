@@ -223,7 +223,7 @@ server <- function(input, output, session) {
   posts_raw <- reactive({
     req(input$files)
     df <- read_uploaded_posts(input$files)
-    shiny::validate(shiny::need(!is.null(df), "Velg minst én fil (posts.json og/eller roffe_posts.csv)."))
+    shiny::validate(shiny::need(!is.null(df), "Velg minst én fil (posts.json og/eller user_posts.csv)."))
     df
   })
 
@@ -247,7 +247,7 @@ server <- function(input, output, session) {
     choices <- sort(unique(na.omit(posts_raw()$audience)))
     choices <- choices[choices != "0"]
     if (length(choices) == 0 || all(choices == "Ukjent")) {
-      return(helpText("Tilgang mangler i datasettet. Bruk Auto (slå sammen) med både posts.json + roffe_posts.csv, eller velg posts.json."))
+      return(helpText("Tilgang mangler i datasettet. Last opp både posts.json + user_posts.csv, eller bare posts.json."))
     }
     checkboxGroupInput("audience", "Tilgang", choices = choices, selected = choices)
   })
